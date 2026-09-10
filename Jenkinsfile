@@ -30,36 +30,23 @@ pipeline {
                         variable: 'BACKEND_ENV'
                     )
                 ]) {
-                    powershell '''
-                        Write-Host "Configuring backend environment..."
+                    bat '''
+                        echo Configuring backend environment...
 
-                        Remove-Item -Recurse -Force "backend\\env_temp" -ErrorAction SilentlyContinue
+                        if exist backend\\env_temp rmdir /s /q backend\\env_temp
 
-                        New-Item -ItemType Directory -Path "backend\\env_temp" -Force | Out-Null
+                        mkdir backend\\env_temp
 
-                        Expand-Archive `
-                            -Path "$env:BACKEND_ENV" `
-                            -DestinationPath "backend\\env_temp" `
-                            -Force
+                        tar -xf "%BACKEND_ENV%" -C backend\\env_temp
 
-                        $envFile = Get-ChildItem `
-                            -Path "backend\\env_temp" `
-                            -Filter ".env" `
-                            -Recurse `
-                            -File |
-                            Select-Object -First 1
+                        if exist backend\\env_temp\\.env (
+                            copy /Y backend\\env_temp\\.env backend\\.env
+                        ) else (
+                            echo ERROR: .env file not found inside credential ZIP
+                            exit /b 1
+                        )
 
-                        if (-not $envFile) {
-                            Write-Error "ERROR: .env file was not found inside the credential ZIP."
-                            exit 1
-                        }
-
-                        Copy-Item `
-                            $envFile.FullName `
-                            "backend\\.env" `
-                            -Force
-
-                        Write-Host ".env configured successfully."
+                        echo .env configured successfully.
                     '''
                 }
             }
@@ -90,7 +77,6 @@ pipeline {
             when {
                 branch 'main'
             }
-
             steps {
                 bat 'docker compose -f docker-compose.yml up -d --remove-orphans'
             }
@@ -114,7 +100,6 @@ pipeline {
         failure {
             echo '======================================'
             echo ' Trash2Treasure deployment FAILED!'
-            echo ' Check the Console Output above.'
             echo '======================================'
         }
     }
