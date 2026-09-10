@@ -1,5 +1,4 @@
 pipeline {
-
     agent any
 
     options {
@@ -31,7 +30,37 @@ pipeline {
                         variable: 'BACKEND_ENV'
                     )
                 ]) {
-                    bat 'copy "%BACKEND_ENV%" backend\\.env'
+                    powershell '''
+                        Write-Host "Configuring backend environment..."
+
+                        Remove-Item -Recurse -Force "backend\\env_temp" -ErrorAction SilentlyContinue
+
+                        New-Item -ItemType Directory -Path "backend\\env_temp" -Force | Out-Null
+
+                        Expand-Archive `
+                            -Path "$env:BACKEND_ENV" `
+                            -DestinationPath "backend\\env_temp" `
+                            -Force
+
+                        $envFile = Get-ChildItem `
+                            -Path "backend\\env_temp" `
+                            -Filter ".env" `
+                            -Recurse `
+                            -File |
+                            Select-Object -First 1
+
+                        if (-not $envFile) {
+                            Write-Error "ERROR: .env file was not found inside the credential ZIP."
+                            exit 1
+                        }
+
+                        Copy-Item `
+                            $envFile.FullName `
+                            "backend\\.env" `
+                            -Force
+
+                        Write-Host ".env configured successfully."
+                    '''
                 }
             }
         }
@@ -61,6 +90,7 @@ pipeline {
             when {
                 branch 'main'
             }
+
             steps {
                 bat 'docker compose -f docker-compose.yml up -d --remove-orphans'
             }
@@ -69,7 +99,23 @@ pipeline {
 
     post {
         always {
-            cleanWs(deleteDirs: true, notFailBuild: true)
+            cleanWs(
+                deleteDirs: true,
+                notFailBuild: true
+            )
+        }
+
+        success {
+            echo '======================================'
+            echo ' Trash2Treasure deployment successful!'
+            echo '======================================'
+        }
+
+        failure {
+            echo '======================================'
+            echo ' Trash2Treasure deployment FAILED!'
+            echo ' Check the Console Output above.'
+            echo '======================================'
         }
     }
 }
