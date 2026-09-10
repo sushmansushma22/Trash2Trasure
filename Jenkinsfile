@@ -33,15 +33,19 @@ pipeline {
                     bat '''
                         echo Configuring backend environment...
 
-                        if exist backend\\env_temp rmdir /s /q backend\\env_temp
+                        if exist backend\\env_temp (
+                            rmdir /s /q backend\\env_temp
+                        )
 
                         mkdir backend\\env_temp
 
-                        tar -xf "%BACKEND_ENV%" -C backend\\env_temp
+                        C:\\Windows\\System32\\tar.exe -xf "%BACKEND_ENV%" -C backend\\env_temp
 
-                        if exist backend\\env_temp\\.env (
-                            copy /Y backend\\env_temp\\.env backend\\.env
-                        ) else (
+                        for /r "backend\\env_temp" %%F in (.env) do (
+                            copy /Y "%%F" "backend\\.env"
+                        )
+
+                        if not exist backend\\.env (
                             echo ERROR: .env file not found inside credential ZIP
                             exit /b 1
                         )
